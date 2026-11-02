@@ -1,0 +1,64 @@
+{
+  "name": "@amerged/n8n-nodes-ohmyhost",
+  "version": "0.1.0",
+  "description": "ohmyho.st projects, PostgreSQL CRUD, direct tables, webhooks and encrypted SQL exports for n8n",
+  "license": "MIT",
+  "homepage": "https://ohmyho.st",
+  "keywords": [
+    "n8n-community-node-package",
+    "ohmyhost",
+    "postgresql",
+    "webhooks"
+  ],
+  "author": {
+    "name": "amerged",
+    "url": "https://ohmyho.st",
+    "email": "smertens@amerged.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amerged-org/n8n-nodes-ohmyhost.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amerged-org/n8n-nodes-ohmyhost/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/OhmyhostApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Ohmyhost/Ohmyhost.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "0.54.6",
+    "n8n-workflow": "2.16.0",
+    "typescript": "5.9.2",
+    "eslint": "9.29.0",
+    "prettier": "3.6.2",
+    "release-it": "21.1.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

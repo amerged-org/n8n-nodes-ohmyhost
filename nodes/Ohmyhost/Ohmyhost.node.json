@@ -1,0 +1,12 @@
+{
+  "node": "@amerged/n8n-nodes-ohmyhost.ohmyhost",
+  "nodeVersion": "1.0",
+  "codexVersion": "1.0",
+  "categories": ["Development", "Data & Storage"],
+  "resources": {
+    "credentialDocumentation": [{ "url": "https://docs.ohmyho.st" }],
+    "primaryDocumentation": [
+      { "url": "https://github.com/amerged-org/n8n-nodes-ohmyhost#readme" }
+    ]
+  }
+}

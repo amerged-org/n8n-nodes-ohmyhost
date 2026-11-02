@@ -1,0 +1,13 @@
+dist
+node_modules
+
+.vendor/
+*.tgz
+
+.ci-check/
+
+.env
+.env.*
+.npmrc
+*.log
+.DS_Store
