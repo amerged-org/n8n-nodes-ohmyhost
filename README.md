@@ -74,15 +74,15 @@ Create a **Database Webhook** with the returned `event_type` and the production 
 
 **Request** creates an asynchronous password-encrypted SQL ZIP for the project's assigned Dev/Prod databases. One accepted request per project per rolling 24 hours is allowed, including failed exports. Retain the same idempotency key after uncertainty. The archive does not contain application source, files, secrets, or configuration.
 
-Map the returned `id` into **Database Export → Get**. Follow `state` and `next_poll_after_seconds`. A queued/running receipt is not a ready download. Enable **Include Download URL** only for downstream download; the signed bearer address is omitted by default and can be stored in n8n execution history when enabled.
+Map the returned `id` into **Database Export → Get**. Leave **Include Download URL** off while polling `state` and `next_poll_after_seconds`. Once the archive is ready, run Get with **Include Download URL** enabled to create a fresh signed address. The node signs once per run when at least 24 hours of archive retention remain. The address is a bearer credential and can be stored in n8n execution history. When a signing request has an uncertain result, repeating the step creates another address.
 
 For a ready archive, connect n8n's built-in **HTTP Request** node, GET `{{$json.archive.download_url}}`, choose **Authentication: None**, and return the response as a file/binary item. Do not send the ohmyho.st API key to the archive URL. The ZIP remains encrypted with the credential's user-chosen password.
 
 ## Compatibility and testing
 
-Developed against the [ohmyho.st API 0.1.46 contract](https://ohmyho.st/releases/0.1.46/openapi.json), `n8n-workflow` 2.16.0, Node.js 24, and n8n 2.45.7. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
+Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json), `n8n-workflow` 2.16.0 and Node.js 24. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
 
-Build and lint use the official `@n8n/node-cli` tool. Tests cover exact routes, query/body placement, SQL write receipts, parameter validation, idempotency, pagination, subscription confirmation, credential isolation, and error/output redaction. A real isolated n8n 2.45.7 Manual Trigger → ohmyho.st Get Many Projects workflow has also been exercised against the live API; SQL writes, database event delivery, and ZIP download are separate live checks and are not claimed by that read test.
+Build and lint use the official `@n8n/node-cli` tool. Tests cover routes, parameters, pagination, idempotency, credential isolation and sanitized errors. An isolated n8n 2.45.7 workflow listed projects through the live API. A separate native n8n 2.48.4 workflow ran **Database Export → Get** with signing enabled. The exact link from that run downloaded a ZIP whose checksum and authenticated AES decryption matched the test archive.
 
 ```sh
 npm ci

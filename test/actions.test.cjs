@@ -413,7 +413,14 @@ test("export request uses the exact protected credential password only in the in
   assert.doesNotMatch(JSON.stringify(result), /password bytes|private-api-key/);
 });
 
-test("export get keeps a signed download URL out of output until explicitly enabled", async () => {
+test("export get signs exactly once only when explicitly enabled for a ready archive", async () => {
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  const link = {
+    id: EXPORT,
+    project_id: PROJECT,
+    download_url: "https://download.example.invalid/new-signed-link",
+    download_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  };
   for (const includeDownloadUrl of [false, true]) {
     const ctx = context(
       {
@@ -423,13 +430,95 @@ test("export get keeps a signed download URL out of output until explicitly enab
         exportId: EXPORT,
         includeDownloadUrl,
       },
-      readyExport,
+      (call) => ({
+        statusCode: 200,
+        body:
+          call.method === "POST"
+            ? link
+            : {
+                ...readyExport,
+                archive: {
+                  ...readyExport.archive,
+                  expires_at: expiresAt,
+                  download_url: null,
+                  download_expires_at: null,
+                },
+              },
+      }),
     );
     const result = await executeOperation(ctx, 0);
     assert.equal(pathOf(ctx.calls[0]), `${projectPath}/exports/${EXPORT}`);
     assert.equal(result.archive.bytes, 256);
     assert.equal("download_url" in result.archive, includeDownloadUrl);
+    assert.equal(ctx.calls.length, includeDownloadUrl ? 2 : 1);
+    if (includeDownloadUrl) {
+      assert.equal(
+        pathOf(ctx.calls[1]),
+        `${projectPath}/exports/${EXPORT}/download-links`,
+      );
+      assert.equal(ctx.calls[1].method, "POST");
+      assert.equal(ctx.calls[1].headers["Idempotency-Key"], undefined);
+      assert.equal(result.archive.download_url, link.download_url);
+      assert.equal(
+        result.archive.download_expires_at,
+        link.download_expires_at,
+      );
+    }
   }
+});
+
+test("pending and insufficient-retention exports stay status-only", async () => {
+  for (const status of [
+    { ...readyExport, state: "running", archive: null },
+    readyExport,
+  ]) {
+    const ctx = context(
+      {
+        ...base,
+        resource: "export",
+        operation: "get",
+        exportId: EXPORT,
+        includeDownloadUrl: true,
+      },
+      status,
+    );
+    const result = await executeOperation(ctx, 0);
+    assert.equal(ctx.calls.length, 1);
+    assert.equal(result.archive?.download_url, undefined);
+  }
+});
+
+test("a rejected signing request is attempted once, with a sanitized error", async () => {
+  const ctx = context(
+    {
+      ...base,
+      resource: "export",
+      operation: "get",
+      exportId: EXPORT,
+      includeDownloadUrl: true,
+    },
+    (call) =>
+      call.method === "POST"
+        ? { statusCode: 429, body: { detail: "private-api-key" } }
+        : {
+            statusCode: 200,
+            body: {
+              ...readyExport,
+              archive: {
+                ...readyExport.archive,
+                expires_at: new Date(
+                  Date.now() + 48 * 60 * 60 * 1000,
+                ).toISOString(),
+              },
+            },
+          },
+  );
+  await assert.rejects(executeOperation(ctx, 0), (error) => {
+    assert.match(error.message, /HTTP 429/);
+    assert.doesNotMatch(error.message, /private-api-key/);
+    return true;
+  });
+  assert.equal(ctx.calls.length, 2);
 });
 
 test("running and failed SQL write receipts stop the action and retain only safe operation metadata", async () => {

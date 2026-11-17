@@ -428,7 +428,7 @@ export const properties: INodeProperties[] = [
     default: false,
     displayOptions: { show: { resource: ["export"], operation: ["get"] } },
     description:
-      "Whether to return the sensitive signed archive URL for a downstream HTTP download; it may be stored in execution history",
+      "Whether to sign a fresh URL for a ready archive with at least 24 hours of retention remaining. The URL may be stored in execution history.",
   },
   {
     displayName:
