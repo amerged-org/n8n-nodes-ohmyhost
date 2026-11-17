@@ -359,15 +359,55 @@ export async function executeOperation(
         false,
       );
     }
-    if (operation === "get")
-      return safeExport(
-        await request(
-          context,
-          "GET",
-          `${project()}/exports/${ulid(p("exportId"), "export ID")}`,
-        ),
-        p("includeDownloadUrl", false) === true,
-      );
+    if (operation === "get") {
+      const projectId = ulid(p("projectId"), "project ID");
+      const exportId = ulid(p("exportId"), "export ID");
+      const path = `/v1/projects/${projectId}/exports/${exportId}`;
+      const data = await request(context, "GET", path);
+      const status = safeExport(data, false);
+      const archive = status.archive as JsonObject | null | undefined;
+      if (p("includeDownloadUrl", false) !== true || !archive) return status;
+
+      if (
+        data.id !== exportId ||
+        data.project_id !== projectId ||
+        data.state !== "succeeded"
+      )
+        throw new SafeError("Unexpected SQL export archive response");
+      const retainedUntil = Date.parse(String(archive.expires_at ?? ""));
+      if (!Number.isFinite(retainedUntil))
+        throw new SafeError("Unexpected SQL export archive expiry");
+      if (retainedUntil - Date.now() < 24 * 60 * 60 * 1000) return status;
+
+      const link = await request(context, "POST", `${path}/download-links`);
+      const url = link.download_url;
+      const expiry = link.download_expires_at;
+      let parsed: URL | undefined;
+      if (typeof url === "string" && url.trim() === url) {
+        try {
+          parsed = new URL(url);
+        } catch {
+          // Return the same safe error for malformed or mismatched capabilities.
+        }
+      }
+      const expires = typeof expiry === "string" ? Date.parse(expiry) : NaN;
+      if (
+        link.id !== exportId ||
+        link.project_id !== projectId ||
+        parsed?.protocol !== "https:" ||
+        parsed.username ||
+        parsed.password ||
+        parsed.hash ||
+        !Number.isFinite(expires) ||
+        expires <= Date.now() ||
+        expires > retainedUntil
+      )
+        throw new SafeError("Unexpected SQL export download link response");
+      return {
+        ...status,
+        archive: { ...archive, download_url: url, download_expires_at: expiry },
+      };
+    }
   }
   throw new SafeError("Choose a supported resource and operation");
 }
