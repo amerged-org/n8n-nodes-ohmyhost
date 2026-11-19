@@ -106,6 +106,10 @@ Release through the repository's GitHub Actions workflow with npm provenance. n8
 
 ## Version history
 
+### 0.1.3
+
+Give the node, dark-theme node and credential icons explicit 100×100 dimensions and a distinct high-contrast dark-theme node icon. No changes to operations, credentials or runtime behaviour.
+
 ### 0.1.2
 
 Declare the supported Node.js range as `>=20.19.0 <25` instead of `>=24.0.0`, so the package installs under strict engine checks on Node.js 20.19 and 22. No changes to operations, credentials or runtime behaviour.
