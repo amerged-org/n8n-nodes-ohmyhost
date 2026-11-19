@@ -80,7 +80,11 @@ For a ready archive, connect n8n's built-in **HTTP Request** node, GET `{{$json.
 
 ## Compatibility and testing
 
-Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json), `n8n-workflow` 2.16.0 and Node.js 24. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
+Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json) and is built against `n8n-workflow` 2.16.0. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
+
+**Runtime:** Node.js 20.19 through 24.x (`>=20.19.0 <25`), matching the range n8n supports for community nodes. The compiled output targets ES2019 and uses no Node-specific APIs, so installing the package does not require Node.js 24.
+
+**Development and release:** Node.js 24. The build, lint and release tooling (`@n8n/node-cli`, `release-it`) needs a newer Node.js than the published package does, and the GitHub Actions publish workflow runs on Node.js 24.
 
 Build and lint use the official `@n8n/node-cli` tool. Tests cover routes, parameters, pagination, idempotency, credential isolation and sanitized errors. An isolated n8n 2.45.7 workflow listed projects through the live API. A separate native n8n 2.48.4 workflow ran **Database Export → Get** with signing enabled. The exact link from that run downloaded a ZIP whose checksum and authenticated AES decryption matched the test archive.
 
@@ -101,6 +105,10 @@ Release through the repository's GitHub Actions workflow with npm provenance. n8
 - [n8n community nodes](https://docs.n8n.io/integrations/community-nodes/)
 
 ## Version history
+
+### 0.1.2
+
+Declare the supported Node.js range as `>=20.19.0 <25` instead of `>=24.0.0`, so the package installs under strict engine checks on Node.js 20.19 and 22. No changes to operations, credentials or runtime behaviour.
 
 ### 0.1.0
 

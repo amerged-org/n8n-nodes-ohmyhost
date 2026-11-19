@@ -1,6 +1,6 @@
 {
   "name": "@amerged/n8n-nodes-ohmyhost",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ohmyho.st projects, PostgreSQL CRUD, direct tables, webhooks and encrypted SQL exports for n8n",
   "license": "MIT",
   "homepage": "https://ohmyho.st",
@@ -23,7 +23,7 @@
     "url": "https://github.com/amerged-org/n8n-nodes-ohmyhost/issues"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=20.19.0 <25"
   },
   "scripts": {
     "build": "n8n-node build",

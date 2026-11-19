@@ -21,3 +21,38 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm pack --dry-run
+
+  # Regression: 0.1.1 declared engines.node >=24.0.0, so a strict install on
+  # Node 20/22 failed with EBADENGINE. Build with Node 24 (the dev toolchain
+  # requires it), then install the packed tarball under each supported runtime.
+  install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.19.0', '22', '24']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - name: Pack the verified build
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Strict install of packed tarball
+        run: |
+          node --version
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          npm init -y
+          npm install --engine-strict --legacy-peer-deps --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz
+          test -f node_modules/@amerged/n8n-nodes-ohmyhost/dist/nodes/Ohmyhost/Ohmyhost.node.js
+          test -f node_modules/@amerged/n8n-nodes-ohmyhost/dist/credentials/OhmyhostApi.credentials.js
