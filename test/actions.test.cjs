@@ -162,6 +162,28 @@ test("project create starts an asynchronous operation with explicit workspace/re
   });
   assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
   assert.notEqual(result.created, true);
+  const prodOnly = context(
+    {
+      ...base,
+      resource: "project",
+      operation: "create",
+      organizationId: ORGANIZATION,
+      projectName: "Connector test",
+      region: "eu",
+      dataMode: "shared",
+      devAccessMode: "protected",
+      includeDevelopment: false,
+    },
+    () => ({
+      statusCode: 202,
+      body: { id: OPERATION, state: "queued", project_id: PROJECT },
+    }),
+  );
+  assert.equal((await executeOperation(prodOnly, 0)).project_id, PROJECT);
+  assert.equal(
+    mutation(prodOnly, "POST")[0].body.include_development_environment,
+    false,
+  );
 });
 
 test("operation get uses the receipt ID supplied by an earlier action", async () => {
@@ -364,6 +386,7 @@ test("webhook test reports actual delivery fields and does not imply database ev
     `${projectPath}/database/webhooks/${WEBHOOK}/test`,
   );
   assert.deepEqual(ctx.calls[0].qs, { environment: "dev" });
+  assert.equal(ctx.calls[0].headers["Idempotency-Key"], base.idempotencyKey);
 });
 
 test("webhook delete confirms one exact subscription and does not delete its watch", async () => {
@@ -384,6 +407,7 @@ test("webhook delete confirms one exact subscription and does not delete its wat
   const call = mutation(ctx, "DELETE")[0];
   assert.equal(pathOf(call), `${projectPath}/database/webhooks/${WEBHOOK}`);
   assert.deepEqual(call.qs, { environment: "dev" });
+  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
   assert.ok(ctx.calls.every((c) => !pathOf(c).includes("/database/watches")));
 });
 
@@ -499,7 +523,19 @@ test("a rejected signing request is attempted once, with a sanitized error", asy
     },
     (call) =>
       call.method === "POST"
-        ? { statusCode: 429, body: { detail: "private-api-key" } }
+        ? {
+            statusCode: 429,
+            body: {
+              code: "rate_limited",
+              title: "Too many requests",
+              detail: "Download links are limited to six a minute.",
+              request_id: "req_test_1",
+              retryable: true,
+              retry_after_seconds: 60,
+              suggested_action: "Wait a minute, then request a new link.",
+              token: "private-api-key",
+            },
+          }
         : {
             statusCode: 200,
             body: {
@@ -514,8 +550,14 @@ test("a rejected signing request is attempted once, with a sanitized error", asy
           },
   );
   await assert.rejects(executeOperation(ctx, 0), (error) => {
-    assert.match(error.message, /HTTP 429/);
+    assert.match(error.message, /HTTP 429 \(rate_limited\)/);
+    assert.match(error.message, /limited to six a minute/);
+    assert.match(error.message, /Suggested action: Wait a minute/);
+    assert.match(error.message, /Retry after 60 seconds/);
+    assert.match(error.message, /Request ID: req_test_1/);
     assert.doesNotMatch(error.message, /private-api-key/);
+    assert.equal(error.receipt.code, "rate_limited");
+    assert.equal(error.receipt.token, undefined);
     return true;
   });
   assert.equal(ctx.calls.length, 2);
@@ -596,6 +638,13 @@ test("an existing watch is not replaced implicitly, and missing export credentia
   );
   await assert.rejects(executeOperation(exportCtx, 0));
   assert.equal(exportCtx.calls.length, 0);
+  const shortCtx = context(
+    { ...base, resource: "export", operation: "request" },
+    {},
+    { apiKey: "private-api-key", zipPassword: "too-short" },
+  );
+  await assert.rejects(executeOperation(shortCtx, 0), /at least 12 characters/);
+  assert.equal(shortCtx.calls.length, 0);
 });
 
 test("invalid read/write schemas, environments, destinations and missing idempotency fail before HTTP", async () => {
@@ -678,6 +727,35 @@ test("API errors and redirects cannot echo credential-bearing upstream objects",
     (error) => !error.message.includes("private-api-key"),
   );
   await assert.rejects(request(ctx, "GET", "//other.example.invalid/v1/me"));
+});
+
+test("thrown n8n API errors surface the problem detail and suggested action, title as fallback", async () => {
+  const problem = {
+    code: "development_environment_missing",
+    title: "Development environment missing",
+    status: 409,
+    request_id: "req_test_2",
+    retryable: false,
+    suggested_action: "Choose Prod or add Dev first.",
+    invalid_fields: ["environment"],
+    configuration_diagnostic: { file: "private-diagnostic" },
+  };
+  const ctx = context({}, () => {
+    throw {
+      message: "private-api-key",
+      httpCode: "409",
+      context: { data: problem },
+      cause: { response: { data: { detail: "private-api-key" } } },
+    };
+  });
+  await assert.rejects(request(ctx, "GET", "/v1/me"), (error) => {
+    assert.match(error.message, /HTTP 409 \(development_environment_missing\)/);
+    assert.match(error.message, /Development environment missing\./);
+    assert.match(error.message, /Suggested action: Choose Prod or add Dev first/);
+    assert.match(error.message, /Invalid fields: environment/);
+    assert.doesNotMatch(error.message, /private-api-key|private-diagnostic/);
+    return true;
+  });
 });
 
 test("project dropdown pagination follows exact API cursors and detects repeated cursors", async () => {

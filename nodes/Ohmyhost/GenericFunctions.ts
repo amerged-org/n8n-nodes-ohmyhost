@@ -163,6 +163,102 @@ function errorStatus(error: unknown): number | undefined {
   }
   return undefined;
 }
+function plain(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const clean = [...value]
+    .map((c) => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? " " : c))
+    .join("")
+    .trim();
+  if (!clean) return undefined;
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+/**
+ * Reads the documented ohmyho.st problem body (code, title, detail, request_id,
+ * retryable, retry_after_seconds, suggested_action, invalid_fields). Only these
+ * fields are kept, each as bounded plain text, so provider or engine exception
+ * contents are never echoed.
+ */
+export function problemFrom(error: unknown): JsonObject | undefined {
+  const sources: unknown[] = [];
+  if (record(error)) {
+    const context = record(error.context) ? error.context : undefined;
+    const response = record(error.response) ? error.response : undefined;
+    const cause = record(error.cause) ? error.cause : undefined;
+    const causeResponse =
+      cause && record(cause.response) ? cause.response : undefined;
+    sources.push(
+      context?.data,
+      response?.data,
+      response?.body,
+      causeResponse?.data,
+      causeResponse?.body,
+      error.body,
+    );
+  }
+  for (let source of sources) {
+    if (typeof source === "string") {
+      try {
+        source = JSON.parse(source);
+      } catch {
+        continue;
+      }
+    }
+    if (!record(source)) continue;
+    const out: JsonObject = {};
+    const code = plain(source.code, 128);
+    if (code && /^[a-z0-9_]+$/.test(code)) out.code = code;
+    const detail = plain(source.detail, 1000) ?? plain(source.title, 200);
+    if (detail) out.detail = detail;
+    const action = plain(source.suggested_action, 500);
+    if (action) out.suggested_action = action;
+    const requestId = plain(source.request_id, 128);
+    if (requestId) out.request_id = requestId;
+    if (typeof source.retryable === "boolean") out.retryable = source.retryable;
+    if (
+      Number.isInteger(source.retry_after_seconds) &&
+      Number(source.retry_after_seconds) > 0
+    )
+      out.retry_after_seconds = source.retry_after_seconds;
+    if (Array.isArray(source.invalid_fields)) {
+      const fields = source.invalid_fields
+        .filter((f): f is string => typeof f === "string" && f.length <= 128)
+        .slice(0, 20);
+      if (fields.length) out.invalid_fields = fields;
+    }
+    if (out.detail || out.code || out.suggested_action) return out;
+  }
+  return undefined;
+}
+export function httpFailure(
+  status: number | undefined,
+  problem?: JsonObject,
+): SafeError {
+  const head = status
+    ? `ohmyho.st returned HTTP ${status}`
+    : "The ohmyho.st request did not complete";
+  if (!problem)
+    return new SafeError(
+      status
+        ? `${head}. Check the connection and inputs; retain the same idempotency key after uncertainty.`
+        : `${head}. Retain the same idempotency key for an uncertain mutation.`,
+    );
+  const sentence = (value: unknown) => {
+    const t = String(value).trim();
+    return /[.!?]$/.test(t) ? t : `${t}.`;
+  };
+  const parts = [
+    `${head}${problem.code ? ` (${String(problem.code)})` : ""}${problem.detail ? `: ${sentence(problem.detail)}` : "."}`,
+  ];
+  if (problem.suggested_action)
+    parts.push(`Suggested action: ${sentence(problem.suggested_action)}`);
+  if (problem.retry_after_seconds)
+    parts.push(`Retry after ${String(problem.retry_after_seconds)} seconds.`);
+  if (Array.isArray(problem.invalid_fields))
+    parts.push(`Invalid fields: ${problem.invalid_fields.join(", ")}.`);
+  if (problem.request_id) parts.push(`Request ID: ${String(problem.request_id)}.`);
+  parts.push("Retain the same idempotency key after uncertainty.");
+  return new SafeError(parts.join(" "), problem as IDataObject);
+}
 export async function request(
   context: ApiContext,
   method: IHttpRequestOptions["method"],
@@ -202,6 +298,7 @@ export async function request(
   let response: unknown;
   let failed = false;
   let statusCode: number | undefined;
+  let problem: JsonObject | undefined;
   try {
     response = await context.helpers.httpRequestWithAuthentication.call(
       context,
@@ -211,20 +308,14 @@ export async function request(
   } catch (error) {
     failed = true;
     statusCode = errorStatus(error);
+    problem = problemFrom(error);
   }
-  if (failed)
-    throw new SafeError(
-      statusCode
-        ? `ohmyho.st returned HTTP ${statusCode}. Check the connection and inputs; retain the same idempotency key after uncertainty.`
-        : "The ohmyho.st request did not complete. Retain the same idempotency key for an uncertain mutation.",
-    );
+  if (failed) throw httpFailure(statusCode, problem);
   if (!record(response) || !Number.isInteger(response.statusCode))
     throw new SafeError("Unexpected HTTP response from ohmyho.st");
   const status = response.statusCode as number;
   if (status < 200 || status >= 300)
-    throw new SafeError(
-      `ohmyho.st returned HTTP ${status}. Check the connection and inputs; retain the same idempotency key after uncertainty.`,
-    );
+    throw httpFailure(status, problemFrom({ response }));
   if (
     (status === 204 || status === 205) &&
     (response.body === "" || response.body === undefined)

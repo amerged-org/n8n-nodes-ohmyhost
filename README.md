@@ -19,7 +19,9 @@ Follow the [n8n community node installation guide](https://docs.n8n.io/integrati
 Create an API key for the intended account/workspace at [ohmyho.st API Tokens](https://app.ohmyho.st/tokens), then add an **ohmyho.st API** credential in n8n:
 
 - **API Key** is required. Authentication is sent only in the Authorization header to the fixed `https://app.ohmyho.st` API.
-- **SQL Export ZIP Password** is optional and needed only for requesting exports. Choose and securely retain it. It cannot be recovered, and its exact bytes are significant. The password stays in the protected credential and is sent only in the export request body.
+- **SQL Export ZIP Password** is optional and needed only for requesting exports. It must have at least 12 characters (at most 1024 bytes). Choose and securely retain it. It cannot be recovered, and its exact bytes are significant. The password stays in the protected credential and is sent only in the export request body.
+
+Terms used by the node: **Prod** is the live site, **Dev** is the Paid-only Development site, and a preview is a private live preview available on every plan. A Free workspace project has Prod only; a Paid workspace project can also have Dev.
 
 Permissions, membership, database row-level security, project budgets, and applicable service limits continue to apply. Database writes and export requests require the appropriate Owner authorization. Requests can wake database compute and incur usage charges.
 
@@ -33,6 +35,10 @@ Permissions, membership, database row-level security, project budgets, and appli
 | Database Watch   | Get Many, Create or explicitly replace, Delete     |
 | Database Webhook | Get Many, Create, Test, Delete                     |
 | Database Export  | Request, Get status and optional download URL      |
+
+**Project → Create** accepts a workspace, name, region, data mode, Dev access and **Include Dev Site** (on by default, matching the API). Turn it off to create a Prod-only project; Dev can be added later. The accepted answer contains the new project ID (`project_id`) and the operation ID (`id`); map the operation ID into **Operation → Get**.
+
+Database, Database Watch and Database Webhook operations take an explicit **Environment**. Choose **Prod (Live Site)** for a Prod-only project, because **Dev (Paid-Only Development Site)** does not exist there.
 
 Project and workspace selectors load real account data. Watch and webhook selectors depend on the selected project and environment. IDs can also be mapped with expressions. Operation and export IDs should be mapped from their preceding receipt; the targeted API contract has no history-list endpoints for these resources.
 
@@ -52,7 +58,9 @@ Choose **Execute SQL Write** for one INSERT, UPDATE, DELETE, or INSERT ... ON CO
 
 The primary key can be `["id"]`, or omitted. Identical existing definitions succeed; conflicting definitions fail. Other schema changes continue to use migrations.
 
-Every logical mutation that accepts an idempotency key needs a stable unique key. Reuse the same key and inputs after an uncertain response. A running or failed SQL write stops the node and provides the safe operation ID when available. Inspect **Operation → Get** before deciding what to do next. With Continue On Fail enabled, error output contains only a safe message and receipt identifiers, with input-item linking preserved.
+Every logical mutation that accepts an idempotency key needs a stable unique key. This includes **Database Webhook → Test** and **Delete**, which the API requires a key for; a new key makes **Test** send another request. Reuse the same key and inputs after an uncertain response. When ohmyho.st refuses a request, the error shows its HTTP status, problem code, the problem `detail` (the `title` when there is no detail), the `suggested_action`, any retry delay and invalid field names, and the request ID. With Continue On Fail enabled, the same safe fields are added to the error item. Provider or engine exception contents and other response fields are never echoed.
+
+A running or failed SQL write stops the node and provides the safe operation ID when available. Inspect **Operation → Get** before deciding what to do next. With Continue On Fail enabled, error output contains only a safe message and receipt identifiers, with input-item linking preserved.
 
 ### Hosted app webhook → SQL workflow
 
@@ -80,7 +88,7 @@ For a ready archive, connect n8n's built-in **HTTP Request** node, GET `{{$json.
 
 ## Compatibility and testing
 
-Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json) and is built against `n8n-workflow` 2.16.0. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
+Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json) as released in 0.1.77 and is built against `n8n-workflow` 2.16.0. Package code has no run-time dependencies beyond n8n's supplied workflow API, and does not access environment variables or the filesystem.
 
 **Runtime:** Node.js 20.19 through 24.x (`>=20.19.0 <25`), matching the range n8n supports for community nodes. The compiled output targets ES2019 and uses no Node-specific APIs, so installing the package does not require Node.js 24.
 
@@ -105,6 +113,17 @@ Release through the repository's GitHub Actions workflow with npm provenance. n8
 - [n8n community nodes](https://docs.n8n.io/integrations/community-nodes/)
 
 ## Version history
+
+### 0.1.4
+
+Align the node with ohmyho.st API 0.1.77.
+
+- **Project → Create**: new **Include Dev Site** option (sent as `include_development_environment: false` when off) for Prod-only projects; the output now carries `project_id`.
+- **Database Webhook → Test** and **Delete** send the Idempotency-Key header the API requires; they gain an **Idempotency Key** field.
+- **Database Export → Request** checks the 12-character minimum ZIP password locally before any request.
+- Errors show the API problem `detail` (or `title`), `suggested_action`, code, retry delay, invalid fields and request ID instead of only the HTTP status.
+- Environment labels and texts use Dev (Paid-only Development site) and Prod (live site); Prod-only projects are documented.
+- All other operations already matched the contract. The credential type and authentication are unchanged.
 
 ### 0.1.3
 

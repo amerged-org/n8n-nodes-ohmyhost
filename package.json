@@ -1,6 +1,6 @@
 {
   "name": "@amerged/n8n-nodes-ohmyhost",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "ohmyho.st projects, PostgreSQL CRUD, direct tables, webhooks and encrypted SQL exports for n8n",
   "license": "MIT",
   "homepage": "https://ohmyho.st",

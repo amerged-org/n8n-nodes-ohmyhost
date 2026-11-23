@@ -144,11 +144,12 @@ export const properties: INodeProperties[] = [
     required: true,
     default: "dev",
     options: [
-      { name: "Dev", value: "dev" },
-      { name: "Prod", value: "prod" },
+      { name: "Dev (Paid-Only Development Site)", value: "dev" },
+      { name: "Prod (Live Site)", value: "prod" },
     ],
     displayOptions: { show: { resource: ["database", "watch", "webhook"] } },
-    description: "Application database environment",
+    description:
+      "Application database environment. Dev exists only on projects with a Development site (Paid workspaces); choose Prod for a Prod-only project.",
   },
   {
     displayName: "Return All",
@@ -226,10 +227,20 @@ export const properties: INodeProperties[] = [
       { name: "Public", value: "public" },
     ],
     displayOptions: { show: { resource: ["project"], operation: ["create"] } },
+    description: "Who can open the Dev site (the Paid-only Development site)",
+  },
+  {
+    displayName: "Include Dev Site",
+    name: "includeDevelopment",
+    type: "boolean",
+    default: true,
+    displayOptions: { show: { resource: ["project"], operation: ["create"] } },
+    description:
+      "Whether to create the Dev site (the Paid-only Development site) next to Prod (the live site). Turn off for a Prod-only project; Dev can be added later.",
   },
   {
     displayName:
-      "Project creation starts provisioning. Use Operation → Get to verify completion; it does not deploy an application.",
+      "Project creation is accepted for asynchronous provisioning. The answer contains the new project ID and the operation ID. Map the operation ID into Operation → Get to verify completion. It does not deploy an application.",
     name: "projectCreationNotice",
     type: "notice",
     default: "",
@@ -259,7 +270,11 @@ export const properties: INodeProperties[] = [
   },
   {
     ...idem,
-    displayOptions: { show: { resource: ["webhook"], operation: ["create"] } },
+    displayOptions: {
+      show: { resource: ["webhook"], operation: ["create", "test", "delete"] },
+    },
+    description:
+      "Stable unique key for one logical mutation; retain the same key and inputs after an uncertain result. A new key sends another Test request.",
   },
   {
     ...idem,

@@ -70,6 +70,9 @@ export async function executeOperation(
         !["protected", "public"].includes(String(access))
       )
         throw new SafeError("Choose a region, data mode and Dev access mode");
+      const includeDev = p("includeDevelopment", true);
+      if (typeof includeDev !== "boolean")
+        throw new SafeError("Choose whether to include the Dev site");
       return request(
         context,
         "POST",
@@ -80,6 +83,7 @@ export async function executeOperation(
           region,
           data_mode: dataMode,
           dev_access_mode: access,
+          ...(includeDev ? {} : { include_development_environment: false }),
         },
         undefined,
         key(),
@@ -320,6 +324,7 @@ export async function executeOperation(
           `${project()}/database/webhooks/${segment(p("webhookId"), "webhook ID")}/test`,
           undefined,
           { environment: env() },
+          key(),
         ),
       ) as JsonObject;
     if (operation === "delete") {
@@ -331,6 +336,7 @@ export async function executeOperation(
           `${project()}/database/webhooks/${segment(p("webhookId"), "webhook ID")}`,
           undefined,
           { environment: env() },
+          key(),
         ),
       ) as JsonObject;
     }
@@ -342,10 +348,11 @@ export async function executeOperation(
       if (
         typeof password !== "string" ||
         !password.trim() ||
+        [...password].length < 12 ||
         new TextEncoder().encode(password).length > 1024
       )
         throw new SafeError(
-          "Set and securely retain a ZIP password in the ohmyho.st credential before requesting an export",
+          "Set and securely retain a ZIP password of at least 12 characters (at most 1024 bytes) in the ohmyho.st credential before requesting an export",
         );
       return safeExport(
         await request(
