@@ -50,7 +50,6 @@ test("default failed or pending SQL errors expose only their safe operation rece
       environment: "dev",
       statement: "INSERT INTO orders(title) VALUES ($1)",
       parameters: ["synthetic-value"],
-      idempotencyKey: "stable-key",
     },
     {
       state: "running",
@@ -105,7 +104,6 @@ test("watch preflight reuses an identical set even when the API normalizes colum
       table: "orders",
       watchColumns: ["id", "title"],
       watchOperations: ["insert", "update"],
-      idempotencyKey: "stable-watch",
     },
     { items: [watch] },
   );
@@ -128,7 +126,6 @@ test("the valid empty primary-key JSON default omits the optional API field", as
       table: "notes",
       columns: [{ name: "title", type: "text" }],
       primaryKey: "[]",
-      idempotencyKey: "stable-table",
     },
     { created: true },
   );

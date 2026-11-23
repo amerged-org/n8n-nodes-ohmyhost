@@ -58,7 +58,7 @@ Choose **Execute SQL Write** for one INSERT, UPDATE, DELETE, or INSERT ... ON CO
 
 The primary key can be `["id"]`, or omitted. Identical existing definitions succeed; conflicting definitions fail. Other schema changes continue to use migrations.
 
-Every logical mutation that accepts an idempotency key needs a stable unique key. This includes **Database Webhook → Test** and **Delete**, which the API requires a key for; a new key makes **Test** send another request. Reuse the same key and inputs after an uncertain response. When ohmyho.st refuses a request, the error shows its HTTP status, problem code, the problem `detail` (the `title` when there is no detail), the `suggested_action`, any retry delay and invalid field names, and the request ID. With Continue On Fail enabled, the same safe fields are added to the error item. Provider or engine exception contents and other response fields are never echoed.
+The node sends a fresh Idempotency-Key with every mutation automatically; there is no key field. When ohmyho.st refuses a request, the error shows its HTTP status, problem code, the problem `detail` (the `title` when there is no detail), the `suggested_action`, any retry delay and invalid field names, and the request ID. With Continue On Fail enabled, the same safe fields are added to the error item. Provider or engine exception contents and other response fields are never echoed.
 
 A running or failed SQL write stops the node and provides the safe operation ID when available. Inspect **Operation → Get** before deciding what to do next. With Continue On Fail enabled, error output contains only a safe message and receipt identifiers, with input-item linking preserved.
 
@@ -66,7 +66,7 @@ A running or failed SQL write stops the node and provides the safe operation ID 
 
 1. Add n8n's built-in **Webhook** node, choose HTTP POST and publish the workflow to obtain its production URL.
 2. Configure your hosted app to POST JSON to that address. Declare the receiver's origin in the app's outbound network policy where required.
-3. Connect an **ohmyho.st** node and map the Webhook body into parameterized SQL values. For example, map `{{$json.body.event_id}}` into the idempotency key and bind application values through the parameters array.
+3. Connect an **ohmyho.st** node and map the Webhook body into parameterized SQL values. For example, bind values such as `{{$json.body.event_id}}` through the parameters array.
 
 Use stable sender event IDs so retries reuse the same write key. The generic receiver URL is a bearer secret; the connector does not add signature verification or authentication to n8n's built-in Webhook node.
 
@@ -80,7 +80,7 @@ Create a **Database Webhook** with the returned `event_type` and the production 
 
 ### Encrypted SQL exports
 
-**Request** creates an asynchronous password-encrypted SQL ZIP for the project's assigned Dev/Prod databases. One accepted request per project per rolling 24 hours is allowed, including failed exports. Retain the same idempotency key after uncertainty. The archive does not contain application source, files, secrets, or configuration.
+**Request** creates an asynchronous password-encrypted SQL ZIP for the project's assigned Dev/Prod databases. One accepted request per project per rolling 24 hours is allowed, including failed exports. The archive does not contain application source, files, secrets, or configuration.
 
 Map the returned `id` into **Database Export → Get**. Leave **Include Download URL** off while polling `state` and `next_poll_after_seconds`. Once the archive is ready, run Get with **Include Download URL** enabled to create a fresh signed address. The node signs once per run when at least 24 hours of archive retention remain. The address is a bearer credential and can be stored in n8n execution history. When a signing request has an uncertain result, repeating the step creates another address.
 
@@ -94,7 +94,7 @@ Uses the [ohmyho.st API contract](https://ohmyho.st/api/openapi.json) as release
 
 **Development and release:** Node.js 24. The build, lint and release tooling (`@n8n/node-cli`, `release-it`) needs a newer Node.js than the published package does, and the GitHub Actions publish workflow runs on Node.js 24.
 
-Build and lint use the official `@n8n/node-cli` tool. Tests cover routes, parameters, pagination, idempotency, credential isolation and sanitized errors. An isolated n8n 2.45.7 workflow listed projects through the live API. A separate native n8n 2.48.4 workflow ran **Database Export → Get** with signing enabled. The exact link from that run downloaded a ZIP whose checksum and authenticated AES decryption matched the test archive.
+Build and lint use the official `@n8n/node-cli` tool. Tests cover routes, parameters, pagination, automatic idempotency keys, credential isolation and sanitized errors. An isolated n8n 2.45.7 workflow listed projects through the live API. A separate native n8n 2.48.4 workflow ran **Database Export → Get** with signing enabled. The exact link from that run downloaded a ZIP whose checksum and authenticated AES decryption matched the test archive.
 
 ```sh
 npm ci
@@ -114,12 +114,16 @@ Release through the repository's GitHub Actions workflow with npm provenance. n8
 
 ## Version history
 
+### 0.1.5
+
+Remove the **Idempotency Key** field from every operation. The node now generates a fresh random key for each item automatically and sends it as the Idempotency-Key header where the API requires one; error messages no longer ask you to retain a key. Requests are otherwise unchanged.
+
 ### 0.1.4
 
 Align the node with ohmyho.st API 0.1.77.
 
 - **Project → Create**: new **Include Dev Site** option (sent as `include_development_environment: false` when off) for Prod-only projects; the output now carries `project_id`.
-- **Database Webhook → Test** and **Delete** send the Idempotency-Key header the API requires; they gain an **Idempotency Key** field.
+- **Database Webhook → Test** and **Delete** send the Idempotency-Key header the API requires; the key is generated automatically.
 - **Database Export → Request** checks the 12-character minimum ZIP password locally before any request.
 - Errors show the API problem `detail` (or `title`), `suggested_action`, code, retry delay, invalid fields and request ID instead of only the HTTP status.
 - Environment labels and texts use Dev (Paid-only Development site) and Prod (live site); Prod-only projects are documented.

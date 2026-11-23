@@ -1,8 +1,8 @@
 import type { IExecuteFunctions } from "n8n-workflow";
+import { randomUUID } from "node:crypto";
 import {
   allProjects,
   environment,
-  idempotency,
   jsonArray,
   names,
   request,
@@ -27,7 +27,7 @@ export async function executeOperation(
   const operation = p("operation");
   const project = () => `/v1/projects/${ulid(p("projectId"), "project ID")}`;
   const env = () => environment(p("environment"));
-  const key = () => idempotency(p("idempotencyKey"));
+  const key = () => randomUUID();
   const confirm = () => {
     if (p("confirmRemoval") !== true)
       throw new SafeError(
@@ -144,7 +144,7 @@ export async function executeOperation(
           ? String(result.state)
           : "incomplete";
         throw new SafeError(
-          `SQL write is ${state}.${operationId ? ` Operation ID: ${operationId}.` : ""} Inspect the operation before retrying with the same idempotency key.`,
+          `SQL write is ${state}.${operationId ? ` Operation ID: ${operationId}.` : ""} Inspect the operation before retrying.`,
           { state, ...(operationId ? { operation_id: operationId } : {}) },
         );
       }

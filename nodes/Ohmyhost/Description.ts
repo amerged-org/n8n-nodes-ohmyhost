@@ -10,15 +10,6 @@ const projectSelector: INodeProperties = {
   description:
     'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
 };
-const idem: INodeProperties = {
-  displayName: "Idempotency Key",
-  name: "idempotencyKey",
-  type: "string",
-  default: "",
-  required: true,
-  description:
-    "Stable unique key for one logical mutation; retain the same key and inputs after an uncertain result",
-};
 const op = (name: string, value: string, action: string) => ({
   name,
   value,
@@ -255,30 +246,6 @@ export const properties: INodeProperties[] = [
     displayOptions: { show: { resource: ["operation"] } },
     description:
       "Map the operation ID returned by a previous asynchronous request",
-  },
-  {
-    ...idem,
-    displayOptions: {
-      show: { resource: ["project", "watch"], operation: ["create", "delete"] },
-    },
-  },
-  {
-    ...idem,
-    displayOptions: {
-      show: { resource: ["database"], operation: ["write", "createTable"] },
-    },
-  },
-  {
-    ...idem,
-    displayOptions: {
-      show: { resource: ["webhook"], operation: ["create", "test", "delete"] },
-    },
-    description:
-      "Stable unique key for one logical mutation; retain the same key and inputs after an uncertain result. A new key sends another Test request.",
-  },
-  {
-    ...idem,
-    displayOptions: { show: { resource: ["export"], operation: ["request"] } },
   },
   {
     displayName: "SQL Statement",

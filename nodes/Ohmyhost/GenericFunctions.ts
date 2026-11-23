@@ -239,8 +239,8 @@ export function httpFailure(
   if (!problem)
     return new SafeError(
       status
-        ? `${head}. Check the connection and inputs; retain the same idempotency key after uncertainty.`
-        : `${head}. Retain the same idempotency key for an uncertain mutation.`,
+        ? `${head}. Check the connection and inputs.`
+        : `${head}. Check the connection and inputs.`,
     );
   const sentence = (value: unknown) => {
     const t = String(value).trim();
@@ -256,7 +256,6 @@ export function httpFailure(
   if (Array.isArray(problem.invalid_fields))
     parts.push(`Invalid fields: ${problem.invalid_fields.join(", ")}.`);
   if (problem.request_id) parts.push(`Request ID: ${String(problem.request_id)}.`);
-  parts.push("Retain the same idempotency key after uncertainty.");
   return new SafeError(parts.join(" "), problem as IDataObject);
 }
 export async function request(

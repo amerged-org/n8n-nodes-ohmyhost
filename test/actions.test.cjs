@@ -93,10 +93,10 @@ function context(
   };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const base = {
   projectId: PROJECT,
   environment: "dev",
-  idempotencyKey: "stable-test-key",
   returnAll: false,
   limit: 10,
 };
@@ -160,7 +160,7 @@ test("project create starts an asynchronous operation with explicit workspace/re
     data_mode: "isolated",
     dev_access_mode: "protected",
   });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
   assert.notEqual(result.created, true);
   const prodOnly = context(
     {
@@ -222,7 +222,7 @@ test("database query sends one parameterized read with explicit environment and 
   });
 });
 
-test("database write forwards JSON values and stable idempotency without returning SQL values", async () => {
+test("database write forwards JSON values and an automatic idempotency key without returning SQL values", async () => {
   const parameters = [{ example: ["nested", 7] }];
   const ctx = context(
     {
@@ -238,7 +238,12 @@ test("database write forwards JSON values and stable idempotency without returni
   const call = ctx.calls[0];
   assert.equal(pathOf(call), `${projectPath}/database/write`);
   assert.deepEqual(call.body.parameters, parameters);
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
+  await executeOperation(ctx, 0);
+  assert.notEqual(
+    ctx.calls[1].headers["Idempotency-Key"],
+    call.headers["Idempotency-Key"],
+  );
 });
 
 test("database createTable calls the direct table API with a supported definition", async () => {
@@ -265,7 +270,7 @@ test("database createTable calls the direct table API with a supported definitio
     columns,
     primary_key: ["id"],
   });
-  assert.equal(ctx.calls[0].headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(ctx.calls[0].headers["Idempotency-Key"], UUID);
 });
 
 test("watch getMany queries the selected environment and returns watch records", async () => {
@@ -306,10 +311,10 @@ test("watch create preflights existing watches then sends only selected columns 
     columns: ["id", "title"],
     operations: ["insert", "update"],
   });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
 });
 
-test("watch delete removes only the selected watch with confirmation and idempotency", async () => {
+test("watch delete removes only the selected watch with confirmation and an automatic idempotency key", async () => {
   const ctx = context(
     {
       ...base,
@@ -330,7 +335,7 @@ test("watch delete removes only the selected watch with confirmation and idempot
   const call = mutation(ctx, "DELETE")[0];
   assert.equal(pathOf(call), `${projectPath}/database/watches/${WATCH}`);
   assert.deepEqual(call.qs, { environment: "dev" });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
 });
 
 test("webhook getMany omits destinations, custom headers, and one-time signing secrets", async () => {
@@ -367,7 +372,7 @@ test("webhook create puts environment in query, credentials outside the URL, and
     url: webhook.url,
     event_types: ["data.orders"],
   });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
   assert.equal(result.id, WEBHOOK);
   assert.doesNotMatch(
     JSON.stringify(result),
@@ -386,7 +391,7 @@ test("webhook test reports actual delivery fields and does not imply database ev
     `${projectPath}/database/webhooks/${WEBHOOK}/test`,
   );
   assert.deepEqual(ctx.calls[0].qs, { environment: "dev" });
-  assert.equal(ctx.calls[0].headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(ctx.calls[0].headers["Idempotency-Key"], UUID);
 });
 
 test("webhook delete confirms one exact subscription and does not delete its watch", async () => {
@@ -407,7 +412,7 @@ test("webhook delete confirms one exact subscription and does not delete its wat
   const call = mutation(ctx, "DELETE")[0];
   assert.equal(pathOf(call), `${projectPath}/database/webhooks/${WEBHOOK}`);
   assert.deepEqual(call.qs, { environment: "dev" });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
   assert.ok(ctx.calls.every((c) => !pathOf(c).includes("/database/watches")));
 });
 
@@ -431,7 +436,7 @@ test("export request uses the exact protected credential password only in the in
   assert.deepEqual(call.body, {
     password: "  retain these exact password bytes  ",
   });
-  assert.equal(call.headers["Idempotency-Key"], base.idempotencyKey);
+  assert.match(call.headers["Idempotency-Key"], UUID);
   assert.deepEqual(ctx.credentialReads, ["ohmyhostApi"]);
   assert.equal(result.state, "queued");
   assert.doesNotMatch(JSON.stringify(result), /password bytes|private-api-key/);
@@ -647,7 +652,7 @@ test("an existing watch is not replaced implicitly, and missing export credentia
   assert.equal(shortCtx.calls.length, 0);
 });
 
-test("invalid read/write schemas, environments, destinations and missing idempotency fail before HTTP", async () => {
+test("invalid read/write schemas, environments, destinations fail before HTTP", async () => {
   const invalid = [
     {
       resource: "database",
@@ -666,13 +671,6 @@ test("invalid read/write schemas, environments, destinations and missing idempot
       operation: "write",
       statement: "CREATE TABLE forbidden (id int)",
       parameters: "[]",
-    },
-    {
-      resource: "database",
-      operation: "write",
-      statement: "UPDATE orders SET title=$1",
-      parameters: '["test"]',
-      idempotencyKey: "",
     },
     {
       resource: "database",
